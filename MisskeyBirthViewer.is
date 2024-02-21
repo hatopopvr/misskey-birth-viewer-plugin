@@ -1,0 +1,151 @@
+/// @ 0.16.0
+### {
+  name: "直近の誕生日のフォローユーザー一覧を取得するプラグイン"
+  version: "0.0.0"
+  author: "はとぽぷ(@hatopop_vr@misskey.io)"
+  description: "このプラグインは、フォローしているユーザーの中で、誕生日が近い人々を見つけ出し、一覧表示します。特別な日を忘れずに、友達や知り合いに温かいメッセージを送れるようにしましょう。"
+  permissions: []
+  config: {
+    dateLimit: {
+      type: "number",
+      label: "誕生日を取得する日数",
+      description: "サーバーに負荷をかけないように長期間の取得はしないようにしてください",
+      default: 7
+    }
+    birthdayHeaderText: {
+      type: "string",
+      label: "ダイアログの誕生日のヘッダーテキスト",
+      default: ":happy_birth_day__i:"
+    }
+    birthdaySuffixText: {
+      type: "string",
+      label: "ダイアログの本日誕生日のユーザーの末尾お祝いテキスト",
+      default: ":omedetou:"
+    }
+    birthdayIsVisible: {
+      type: "boolean",
+      label: "ダイアログのその人の誕生日を表示するか",
+      default: true
+    }
+  }
+}
+
+// APIでフォローを取得する関数
+@getFollowing(user_id, birth_date, limit) {
+    let resultList = []
+
+    let payload = {
+        userId: user_id
+        birthday: birth_date
+        limit: limit
+    }
+
+    let result = Mk:api(`users/following` payload)
+    each (let res result){
+        resultList.push(res)
+    }
+    resultList
+}
+
+// ユーザーと誕生日の一覧を取得する関数
+@getUserBirthList(resultList, birthdayFlag) {
+    let birthList = []
+
+    each (let result resultList) {
+        let id = result.followee.id
+        let name = result.followee.name
+        let username = result.followee.username
+        var birthday = result.followee.birthday
+        let resultTextList = []
+        // 誕生日を表示するかの設定
+        if (Plugin:config.birthdayIsVisible) {
+            resultTextList.push(`{birthday}`)
+        }
+        // ユーザー名を表示するかの設定
+        resultTextList.push(`@{username} {name}さん`)
+        // 本日誕生日のユーザーの末尾お祝いテキストを表示するかの設定
+        if (birthdayFlag) {
+            resultTextList.push(`{Plugin:config.birthdaySuffixText}`)
+        }
+        let resultText = resultTextList.join(" ")
+        birthList.push(resultText)
+    }
+    return birthList
+}
+
+@addDays(date, daysToAdd) {
+    var newDay = date.day + daysToAdd
+    var newMonth = date.month
+    var newYear = date.year
+
+    // 月ごとの日数を定義
+    var daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+    // 閏年の判定
+    if (newYear % 4 == 0 && (newYear % 100 != 0 || newYear % 400 == 0)) {
+        daysInMonth[1] = 29
+    }
+
+    // 日付の加算と月の繰り上げ
+    var count = 0
+    loop {
+        if (newDay <= daysInMonth[newMonth - 1]) break
+        newDay = newDay - daysInMonth[newMonth - 1]
+        newMonth = newMonth + 1
+        if (newMonth > 12) {
+            newMonth = 1
+            newYear = newYear + 1
+        }
+        count = count + 1
+    }
+
+    return { year: newYear, month: newMonth, day: newDay }
+}
+
+// メイン処理
+@misskeyBirthViewer(isFollowers) {
+    // Mk:dialog("user_id" USER_ID)
+    // USER_ID: 自分のID固定値
+    let user_id = USER_ID
+    let limit = 100
+    let dialogTextList = []
+
+    var today = {
+        year: Date:year(),
+        month: Date:month(),
+        day: Date:day()
+    }
+
+    // 以下の部分でループしてAPIを呼び出す
+    var i = 0
+
+    loop {
+        if (i >= Plugin:config.dateLimit) break
+        var newDate = addDays(today, i)
+        var dateStr = `{newDate.year}-{newDate.month}-{newDate.day}`
+        // ここにAPIを呼び出す処理を書く
+        let followingList = getFollowing(user_id, dateStr, limit)
+
+        if (followingList.len > 0) {
+            var followingBirthList = []
+
+            if (today.day == newDate.day) {
+                followingBirthList = getUserBirthList(followingList, true)
+                dialogTextList.push(`=== {dateStr} {Plugin:config.birthdayHeaderText} ===`)
+                dialogTextList.push(`{followingBirthList.join(Str:lf)}{Str:lf}`)
+            } else {
+                followingBirthList = getUserBirthList(followingList, false)
+                if (newDate.day == 1) {
+                    dialogTextList.push(`{Str:lf}=== {dateStr} ===`)
+                } else {
+                    dialogTextList.push(`--- {dateStr} ---`)
+                }
+                dialogTextList.push(followingBirthList.join(Str:lf))
+            }
+        }
+        i = i + 1
+    }
+    Mk:dialog("直近の誕生日のフォロー一覧(※本スクリプトはフォロワーは取得できません)" dialogTextList.join(Str:lf))
+}
+
+Plugin:register_post_form_action(`[閲覧]直近の誕生日を取得！` @(f u) {u("text" misskeyBirthViewer(true))})
