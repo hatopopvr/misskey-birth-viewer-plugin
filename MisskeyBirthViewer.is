@@ -1,30 +1,45 @@
 /// @ 0.16.0
 ### {
-  name: "直近の誕生日のフォローユーザー一覧を取得するプラグイン"
-  version: "0.0.0"
+  name: "直近の誕生日を持つフォローユーザー一覧を取得するプラグイン"
+  version: "0.1.0"
   author: "はとぽぷ(@hatopop_vr@misskey.io)"
   description: "このプラグインは、フォローしているユーザーの中で、誕生日が近い人々を見つけ出し、一覧表示します。特別な日を忘れずに、友達や知り合いに温かいメッセージを送れるようにしましょう。"
   permissions: []
   config: {
+    dateInputIsEnabled: {
+      type: "boolean",
+      label: "日数の手動入力",
+      description: "毎回、誕生日を取得する日数を手動で入力するかどうかを設定します。"
+      default: true
+    }
     dateLimit: {
       type: "number",
-      label: "誕生日を取得する日数",
-      description: "サーバーに負荷をかけないように長期間の取得はしないようにしてください",
+      label: "取得日数",
+      description: "取得する日数を入力してください。リクエストは1日単位で行われ、各日についてフォローユーザーの誕生日情報を取得します。サーバーに過度な負荷をかけないよう、適切な数値を設定してください。最大値: 365"
       default: 7
+    }
+    processTimeCoef : {
+      type: "number",
+      label: "総処理時間見積係数",
+      description: "各リクエストの間隔として設定される時間の合計に対して、実際の処理時間の見積もりを行うための係数です。デフォルト値1.3"
+      default: 1.3
     }
     birthdayHeaderText: {
       type: "string",
-      label: "ダイアログの誕生日のヘッダーテキスト",
+      label: "誕生日ヘッダーテキスト",
+      description: "誕生日一覧ダイアログのヘッダーに表示するテキスト。"
       default: ":happy_birth_day__i:"
     }
     birthdaySuffixText: {
       type: "string",
-      label: "ダイアログの本日誕生日のユーザーの末尾お祝いテキスト",
+      label: "お祝いテキスト",
+      description: "本日誕生日のユーザーに表示するお祝いテキスト。"
       default: ":omedetou:"
     }
     birthdayIsVisible: {
       type: "boolean",
-      label: "ダイアログのその人の誕生日を表示するか",
+      label: "誕生日表示",
+      description: "ダイアログに各ユーザーの誕生日を表示するかどうかを設定します。"
       default: true
     }
   }
@@ -107,7 +122,62 @@
     // USER_ID: 自分のID固定値
     let user_id = USER_ID
     let limit = 100
+    let dateLimitMax = 365
+    var dateLimit = Plugin:config.dateLimit
     let dialogTextList = []
+
+    if (Plugin:config.dateInputIsEnabled) {
+        var input = readline(`直近の誕生日のフォロー一覧を取得する日数を入力してください。
+
+本スクリプトはフォローユーザーのみ対象です。フォロワーは対象外です。
+リクエストは日単位で実行されます。
+１回あたりのインターバルは日数x10msecで長くなるよう設定しています(最大1000msec)。
+最小限必要な日数だけを入力してください。
+
+インターバルと処理時間の目安（インターバルを考慮）:
+- 7日: インターバル約70msec、総インターバル 約490msec
+- 14日: インターバル約140msec、総インターバル 約1960msec
+- 30日: インターバル約300msec、総インターバル 約9,000msec
+- 90日: インターバル約900msec、総インターバル 約81,000msec
+- 365日(最大): インターバル最大1000msec、総インターバル 約365,000msec
+
+※入力は半角数字のみ有効です（例: 7）。数値以外の入力は無効となります。`)
+
+        if (input == null) return null // ユーザーがキャンセルを選択した場合、ループを抜けて処理を終了
+
+        input = input.to_num()
+        if Core:type(input) == 'error' || input == null return null // 数値でない入力の場合、ループの最初に戻る
+
+        // 日付の是正
+        if (input > dateLimitMax) {
+            input = dateLimitMax
+        }
+
+        dateLimit = input
+    }
+
+    // インターバルの計算
+    var interval = dateLimit * 10
+    if (interval >= 1000) {
+        interval = 1000
+    }
+
+    if (dateLimit > dateLimitMax) {
+        dateLimit = dateLimitMax
+    }
+
+    var totalInterval = dateLimit * interval
+    var totalTimePred = totalInterval * Plugin:config.processTimeCoef
+
+    if (dateLimit >= 30) {
+        var conditionText = `取得日数: {dateLimit}日
+インターバル: {interval}msec
+総インターバル: {totalInterval}msec = {totalInterval/1000}sec
+総処理時間予測※: {totalTimePred}msec = {totalTimePred/1000}sec
+※実際の総処理時間は、インターバルの誤差やAPIのレスポンス時間により変動します。`
+
+        Mk:dialog(`長期間のデータ取得が指定されました。以下の条件で実行しますので、しばらくお待ちください。` conditionText)
+    }
 
     var today = {
         year: Date:year(),
@@ -119,7 +189,7 @@
     var i = 0
 
     loop {
-        if (i >= Plugin:config.dateLimit) break
+        if (i >= dateLimit) break
         var newDate = addDays(today, i)
         var dateStr = `{newDate.year}-{newDate.month}-{newDate.day}`
         // ここにAPIを呼び出す処理を書く
@@ -128,7 +198,7 @@
         if (followingList.len > 0) {
             var followingBirthList = []
 
-            if (today.day == newDate.day) {
+            if (today.day == newDate.day) && (today.month == newDate.month) {
                 followingBirthList = getUserBirthList(followingList, true)
                 dialogTextList.push(`=== {dateStr} {Plugin:config.birthdayHeaderText} ===`)
                 dialogTextList.push(`{followingBirthList.join(Str:lf)}{Str:lf}`)
@@ -141,10 +211,12 @@
                 }
                 dialogTextList.push(followingBirthList.join(Str:lf))
             }
+            // リクエストを待つ時間
+            Core:sleep(interval)
         }
         i = i + 1
     }
-    Mk:dialog("直近の誕生日のフォロー一覧(※本スクリプトはフォロワーは取得できません)" dialogTextList.join(Str:lf))
+    Mk:dialog(`直近{dateLimit}日の誕生日のフォロー一覧` dialogTextList.join(Str:lf))
     overrideResultText
 }
 
