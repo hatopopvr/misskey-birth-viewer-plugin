@@ -5,7 +5,9 @@
 本プラグインの対象は現在同一サーバーのフォローしているユーザーのみになります。
 
 ## 使い方
-ノート投稿部の`プラグイン`ボタン > `[閲覧]直近の誕生日を取得`を選択すると、ダイアログウインドウにて結果が表示されます。
+ノート投稿部の`プラグイン`ボタン > `[閲覧]直近の誕生日を取得！`を選択すると、ダイアログウインドウにて結果が表示されます。
+
+![image](images/image_001.jpg)
 
 ## 導入
 1. [`release`](https://github.com/hatopopvr/misskey-birth-viewer-plugin/releases)から`MisskeyBirthViewer.is`をダウンロードします。

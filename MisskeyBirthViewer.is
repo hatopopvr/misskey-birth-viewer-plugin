@@ -103,8 +103,7 @@
 }
 
 // メイン処理
-@misskeyBirthViewer(isFollowers) {
-    // Mk:dialog("user_id" USER_ID)
+@misskeyBirthViewer(overrideResultText) {
     // USER_ID: 自分のID固定値
     let user_id = USER_ID
     let limit = 100
@@ -146,6 +145,7 @@
         i = i + 1
     }
     Mk:dialog("直近の誕生日のフォロー一覧(※本スクリプトはフォロワーは取得できません)" dialogTextList.join(Str:lf))
+    overrideResultText
 }
 
-Plugin:register_post_form_action(`[閲覧]直近の誕生日を取得！` @(f u) {u("text" misskeyBirthViewer(true))})
+Plugin:register_post_form_action(`[閲覧]直近の誕生日を取得！` @(f u) {u("text" misskeyBirthViewer(f.text))})
