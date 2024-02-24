@@ -1,10 +1,10 @@
 /// @ 0.16.0
 ### {
   name: "直近の誕生日を持つフォローユーザー一覧を取得するプラグイン"
-  version: "0.1.0"
+  version: "0.1.1"
   author: "はとぽぷ(@hatopop_vr@misskey.io)"
   description: "このプラグインは、フォローしているユーザーの中で、誕生日が近い人々を見つけ出し、一覧表示します。特別な日を忘れずに、友達や知り合いに温かいメッセージを送れるようにしましょう。"
-  permissions: []
+  permissions: ["read:following"]
   config: {
     dateInputIsEnabled: {
       type: "boolean",
