@@ -1,7 +1,7 @@
 /// @ 0.16.0
 ### {
   name: "直近の誕生日を持つフォローユーザー一覧を取得するプラグイン"
-  version: "0.1.1"
+  version: "0.1.2"
   author: "はとぽぷ(@hatopop_vr@misskey.io)"
   description: "このプラグインは、フォローしているユーザーの中で、誕生日が近い人々を見つけ出し、一覧表示します。特別な日を忘れずに、友達や知り合いに温かいメッセージを送れるようにしましょう。"
   permissions: ["read:following"]
@@ -69,15 +69,26 @@
     each (let result resultList) {
         let id = result.followee.id
         let name = result.followee.name
-        let username = result.followee.username
+        var username = result.followee.username
+        var userHost = result.followee.host
         var birthday = result.followee.birthday
+
+        // リモートユーザー対応
+        if (userHost == null) {
+            username = `@{result.followee.username}`
+        } else {
+            username = `@{result.followee.username}@{userHost}`
+        }
+
         let resultTextList = []
         // 誕生日を表示するかの設定
         if (Plugin:config.birthdayIsVisible) {
             resultTextList.push(`{birthday}`)
         }
+
         // ユーザー名を表示するかの設定
-        resultTextList.push(`@{username} {name}さん`)
+        resultTextList.push(`{username} {name}さん`)
+
         // 本日誕生日のユーザーの末尾お祝いテキストを表示するかの設定
         if (birthdayFlag) {
             resultTextList.push(`{Plugin:config.birthdaySuffixText}`)
