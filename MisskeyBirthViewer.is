@@ -1,7 +1,7 @@
 /// @ 0.16.0
 ### {
   name: "直近の誕生日を持つフォローユーザー一覧を取得するプラグイン"
-  version: "0.1.2"
+  version: "0.2.0"
   author: "はとぽぷ(@hatopop_vr@misskey.io)"
   description: "このプラグインは、フォローしているユーザーの中で、誕生日が近い人々を見つけ出し、一覧表示します。特別な日を忘れずに、友達や知り合いに温かいメッセージを送れるようにしましょう。"
   permissions: ["read:following"]
@@ -42,6 +42,24 @@
       description: "ダイアログに各ユーザーの誕生日を表示するかどうかを設定します。"
       default: true
     }
+    inactiveDaysLimit: {
+      type: "number",
+      label: "Inactive日数",
+      description: "最終更新日からの経過日数がこの値を超えたユーザーをInactiveユーザーとして判定します。"
+      default: 7
+    }
+    excludeInactiveUsers: {
+      type: "boolean",
+      label: "Inactiveユーザーを除外",
+      description: "最終更新日から指定された日数を超えて更新がないInactiveユーザーをリストから除外します。",
+      default: false
+    }
+    excludeMuteUsers: {
+      type: "boolean",
+      label: "ミュート中のユーザーを除外",
+      description: "ミュートしているユーザーをリストから除外します。",
+      default: false
+    }
   }
 }
 
@@ -62,6 +80,19 @@
     resultList
 }
 
+// Inactiveユーザーを判定する関数
+@isUserInactive(updatedAt) {
+    var currentTime = Date:now()
+    var updatedAtTime = Date:parse(updatedAt)
+    var differenceInDays = (currentTime - updatedAtTime) / (1000 * 3600 * 24)
+
+    // 設定からInactive日数の上限を取得
+    var inactiveDaysLimit = Plugin:config.inactiveDaysLimit
+
+    // 最終更新日からの経過日数が設定値以上ならtrueを返す
+    return differenceInDays > inactiveDaysLimit
+}
+
 // ユーザーと誕生日の一覧を取得する関数
 @getUserBirthList(resultList, birthdayFlag) {
     let birthList = []
@@ -72,6 +103,18 @@
         var username = result.followee.username
         var userHost = result.followee.host
         var birthday = result.followee.birthday
+        let updatedAt = result.followee.updatedAt
+        let isBlocking = result.followee.isBlocking
+        let isBlocked = result.followee.isBlocked
+        let isMuted = result.followee.isMuted
+
+        // 設定に基づいてユーザーを除外
+        if (Plugin:config.excludeInactiveUsers && isUserInactive(updatedAt)) {
+            continue // 次のループへスキップ
+        }
+        if (Plugin:config.excludeMuteUsers && isMuted) {
+            continue
+        }
 
         // リモートユーザー対応
         if (userHost == null) {
@@ -88,6 +131,13 @@
 
         // ユーザー名を表示するかの設定
         resultTextList.push(`{username} {name}さん`)
+
+        // Inactiveユーザーの場合の最終更新日追加表示
+        if (isUserInactive(updatedAt)) {
+            // Inactiveユーザーの場合の処理をここに書く
+            var formattedDate = updatedAt.split('T')[0]
+            resultTextList.push(`<small><small>(Inactive: 最終更新日: {formattedDate})</small></small>`)
+        }
 
         // 本日誕生日のユーザーの末尾お祝いテキストを表示するかの設定
         if (birthdayFlag) {
@@ -211,16 +261,20 @@
 
             if (today.day == newDate.day) && (today.month == newDate.month) {
                 followingBirthList = getUserBirthList(followingList, true)
-                dialogTextList.push(`=== {dateStr} {Plugin:config.birthdayHeaderText} ===`)
-                dialogTextList.push(`{followingBirthList.join(Str:lf)}{Str:lf}`)
+                if (followingBirthList.len > 0) {
+                    dialogTextList.push(`=== {dateStr} {Plugin:config.birthdayHeaderText} ===`)
+                    dialogTextList.push(`{followingBirthList.join(Str:lf)}{Str:lf}`)
+                }
             } else {
                 followingBirthList = getUserBirthList(followingList, false)
-                if (newDate.day == 1) {
-                    dialogTextList.push(`{Str:lf}=== {dateStr} ===`)
-                } else {
-                    dialogTextList.push(`--- {dateStr} ---`)
+                if (followingBirthList.len > 0) {
+                    if (newDate.day == 1) {
+                        dialogTextList.push(`{Str:lf}=== {dateStr} ===`)
+                    } else {
+                        dialogTextList.push(`--- {dateStr} ---`)
+                    }
+                    dialogTextList.push(followingBirthList.join(Str:lf))
                 }
-                dialogTextList.push(followingBirthList.join(Str:lf))
             }
             // リクエストを待つ時間
             Core:sleep(interval)
