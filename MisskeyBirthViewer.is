@@ -46,7 +46,7 @@
       type: "number",
       label: "Inactive日数",
       description: "最終更新日からの経過日数がこの値を超えたユーザーをInactiveユーザーとして判定します。"
-      default: 7
+      default: 30
     }
     excludeInactiveUsers: {
       type: "boolean",
